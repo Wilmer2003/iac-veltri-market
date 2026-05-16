@@ -42,3 +42,129 @@ terraform.rc
 # Optional: ignore plan files saved before destroying Terraform configuration
 # Uncomment the line below if you want to ignore planout files.
 # planout
+
+
+·······································································
+
+# =============================================================================
+# .gitignore — Veltri Infra
+# =============================================================================
+# Estos archivos NO se suben al repositorio de GitHub porque contienen
+# información sensible o son generados automáticamente por Terraform/AWS.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Terraform — Archivos locales generados automáticamente
+# -----------------------------------------------------------------------------
+
+# Directorio con plugins descargados (muy pesado, >100MB)
+# Cada miembro del equipo los descarga con "terraform init"
+.terraform/
+.terraform.lock.hcl
+
+# Estado de Terraform LOCAL — NUNCA subir al repo si contiene datos reales
+# El tfstate se guarda en S3 (backend remoto) para trabajo grupal
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+
+# Variables con valores sensibles (contraseñas, API keys)
+# Crear este archivo localmente pero NUNCA subirlo
+*.tfvars
+!*.tfvars.example    # Los archivos .example SÍ se suben como plantilla
+
+# Archivos de plan guardados (pueden contener info sensible)
+*.tfplan
+
+# Override files — configuraciones locales temporales
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+
+# -----------------------------------------------------------------------------
+# AWS — Credenciales y configuración local
+# -----------------------------------------------------------------------------
+
+# Credenciales AWS — JAMÁS subir al repo
+.aws/
+credentials
+*.pem
+*.key
+
+# Variables de entorno locales
+.env
+.env.local
+.env.dev
+.env.prod
+
+
+# -----------------------------------------------------------------------------
+# Sistema operativo
+# -----------------------------------------------------------------------------
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+
+# -----------------------------------------------------------------------------
+# IDEs y editores
+# -----------------------------------------------------------------------------
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains (PyCharm, IntelliJ)
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+
+
+# -----------------------------------------------------------------------------
+# Python / Django (para el directorio backend/)
+# -----------------------------------------------------------------------------
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+# -----------------------------------------------------------------------------
+# Docker
+# -----------------------------------------------------------------------------
+
+# No subir imágenes Docker construidas localmente
+*.tar
+
+
+# -----------------------------------------------------------------------------
+# Logs
+# -----------------------------------------------------------------------------
+
+*.log
+logs/
