@@ -1,54 +1,40 @@
 # =============================================================================
-# ENTORNO: DEV — main.tf
+# ENTORNO: DEV — main.tf (Actualizado Semana 2)
 # =============================================================================
-# Este archivo es el "orquestador" del entorno de desarrollo.
-# Llama a los módulos (vpc, security_groups, etc.) con valores de DEV:
-#   - Una sola AZ (para ahorrar costos en desarrollo)
-#   - Instancias más pequeñas
-#   - Sin Multi-AZ en Aurora
+# Este archivo conecta todos los módulos creados hasta ahora:
+#   Semana 1: VPC + Security Groups
+#   Semana 2: Aurora + Secrets Manager  ← NUEVO
 #
-# Para desplegar este entorno:
-#   cd terraform/environments/dev
-#   terraform init
-#   terraform plan
-#   terraform apply
+# ORDEN DE EJECUCIÓN que Terraform resuelve automáticamente:
+#   1. VPC (primero — todo depende de la red)
+#   2. Security Groups (necesita vpc_id)
+#   3. Aurora (necesita subredes privadas y sg_aurora_id)
+#   4. Secrets Manager (necesita endpoint de Aurora y kms_key_arn)
 # =============================================================================
-
-# -----------------------------------------------------------------------------
-# CONFIGURACIÓN DEL PROVIDER AWS
-# -----------------------------------------------------------------------------
-# Especifica la región y versión mínima del provider Terraform para AWS.
-# La región debe coincidir con donde tienen acceso en la cuenta AWS.
-# -----------------------------------------------------------------------------
 
 terraform {
-  required_version = ">= 1.6.0"  # Versión mínima de Terraform
+  required_version = ">= 1.6.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"  # Usar AWS Provider v5.x
+      version = "~> 5.0"
     }
   }
 
-  # Backend remoto para guardar el tfstate en S3 (trabajo grupal)
-  # Descomentar cuando tengan el bucket S3 y la tabla DynamoDB creados.
-  # IMPORTANTE: El tfstate guarda el estado real de la infraestructura.
-  # Si se pierde, Terraform no sabe qué recursos ya existen.
-  #
+  # Backend S3 para trabajo grupal — descomentar cuando tengan el bucket
   # backend "s3" {
-  #   bucket         = "veltri-terraform-state-dev"   # Bucket S3 para el tfstate
-  #   key            = "dev/terraform.tfstate"         # Ruta dentro del bucket
+  #   bucket         = "veltri-terraform-state-dev"
+  #   key            = "dev/terraform.tfstate"
   #   region         = "us-east-1"
-  #   dynamodb_table = "veltri-terraform-locks"        # Tabla para bloqueo de estado
-  #   encrypt        = true                            # Cifrar el tfstate en reposo
+  #   dynamodb_table = "veltri-terraform-locks"
+  #   encrypt        = true
   # }
 }
 
 provider "aws" {
   region = var.aws_region
 
-  # Tags por defecto que se aplican a TODOS los recursos automáticamente
   default_tags {
     tags = {
       Project     = "veltri-minimarket"
@@ -59,15 +45,13 @@ provider "aws" {
   }
 }
 
-
 # -----------------------------------------------------------------------------
 # VARIABLES DEL ENTORNO DEV
 # -----------------------------------------------------------------------------
 
 variable "aws_region" {
-  description = "Región AWS donde se desplegará la infraestructura."
-  type        = string
-  default     = "us-east-1"
+  type    = string
+  default = "us-east-1"
 }
 
 variable "project_name" {
@@ -75,19 +59,24 @@ variable "project_name" {
   default = "veltri-dev"
 }
 
+# Credenciales de BD — en DEV se pasan como variables de entorno:
+#   export TF_VAR_db_master_password="MiPassword123!"
+# NUNCA escribir el valor aquí directamente
+variable "db_master_password" {
+  description = "Contraseña de Aurora. Pasar como variable de entorno: export TF_VAR_db_master_password='...' "
+  type        = string
+  sensitive   = true
+}
+
 
 # -----------------------------------------------------------------------------
-# MÓDULO 1: VPC (Red principal)
-# -----------------------------------------------------------------------------
-# Primer módulo en ejecutarse. Crea toda la red antes que cualquier otra cosa.
+# MÓDULO 1: VPC (Semana 1 — sin cambios)
 # -----------------------------------------------------------------------------
 
 module "vpc" {
-  source = "../../modules/vpc"
+  source = "../../Modulos/Vpc"
 
-  project_name = var.project_name
-
-  # Bloques CIDR de la red
+  project_name           = var.project_name
   vpc_cidr               = "10.0.0.0/16"
   public_subnet_1_cidr   = "10.0.1.0/24"
   public_subnet_2_cidr   = "10.0.2.0/24"
@@ -95,10 +84,8 @@ module "vpc" {
   private_backend_2_cidr = "10.0.4.0/24"
   private_db_1_cidr      = "10.0.5.0/24"
   private_db_2_cidr      = "10.0.6.0/24"
-
-  # En DEV usamos las primeras 2 AZs disponibles de us-east-1
-  az_a = "us-east-1a"
-  az_b = "us-east-1b"
+  az_a                   = "us-east-1a"
+  az_b                   = "us-east-1b"
 
   common_tags = {
     Project     = "veltri-minimarket"
@@ -109,18 +96,85 @@ module "vpc" {
 
 
 # -----------------------------------------------------------------------------
-# MÓDULO 2: Security Groups (Firewall por capas)
-# -----------------------------------------------------------------------------
-# Segundo en ejecutarse. Necesita el vpc_id del módulo anterior.
-# Terraform resuelve esta dependencia automáticamente.
+# MÓDULO 2: Security Groups (Semana 1 — sin cambios)
 # -----------------------------------------------------------------------------
 
 module "security_groups" {
-  source = "../../modules/security_groups"
+  source = "../../Modulos/Seguridad"
 
   project_name = var.project_name
-  vpc_id       = module.vpc.vpc_id    # <-- Referencia al output del módulo vpc
+  vpc_id       = module.vpc.vpc_id
   vpc_cidr     = module.vpc.vpc_cidr
+
+  common_tags = {
+    Project     = "veltri-minimarket"
+    Environment = "dev"
+    ManagedBy   = "terraform"
+  }
+}
+
+
+# -----------------------------------------------------------------------------
+# MÓDULO 3: Aurora MySQL Multi-AZ (Semana 2 — NUEVO)
+# -----------------------------------------------------------------------------
+
+module "aurora" {
+  source = "../../Modulos/Aurora"
+
+  project_name = var.project_name
+
+  # Red — viene del módulo VPC
+  private_db_subnet_ids = module.vpc.private_db_subnet_ids  # Subredes 5 y 6
+  sg_aurora_id          = module.security_groups.sg_aurora_id
+  availability_zones    = ["us-east-1a", "us-east-1b"]
+  az_a                  = "us-east-1a"
+  az_b                  = "us-east-1b"
+
+  # Base de datos
+  database_name      = "veltri_db"
+  db_master_username = "veltri_admin"
+  db_master_password = var.db_master_password  # Viene de variable de entorno segura
+
+  # En DEV usamos instancia pequeña para ahorrar costos (~$30/mes)
+  # En PROD cambiar a "db.t3.medium" (~$130/mes)
+  db_instance_class = "db.t3.micro"
+
+  # KMS — el módulo Aurora crea su propia clave, pasamos string vacío
+  kms_key_arn = ""
+
+  common_tags = {
+    Project     = "veltri-minimarket"
+    Environment = "dev"
+    ManagedBy   = "terraform"
+  }
+}
+
+
+# -----------------------------------------------------------------------------
+# MÓDULO 4: Secrets Manager (Semana 2 — NUEVO)
+# -----------------------------------------------------------------------------
+
+module "secrets_manager" {
+  source = "../../Modulos/SecretsManager"
+
+  project_name = var.project_name
+  aws_region   = var.aws_region
+
+  # Red — para la Lambda de rotación
+  private_db_subnet_ids = module.vpc.private_db_subnet_ids
+  sg_aurora_id          = module.security_groups.sg_aurora_id
+
+  # Credenciales — las mismas que Aurora
+  db_master_username = "veltri_admin"
+  db_master_password = var.db_master_password
+
+  # Conexión a Aurora — viene de los outputs del módulo Aurora
+  aurora_writer_endpoint = module.aurora.aurora_writer_endpoint
+  aurora_port            = module.aurora.aurora_port
+  database_name          = "veltri_db"
+
+  # KMS — la misma clave que usa Aurora
+  kms_key_arn = module.aurora.kms_key_arn
 
   common_tags = {
     Project     = "veltri-minimarket"
@@ -133,29 +187,31 @@ module "security_groups" {
 # -----------------------------------------------------------------------------
 # OUTPUTS DEL ENTORNO DEV
 # -----------------------------------------------------------------------------
-# Muestra información útil después de aplicar Terraform.
-# Verás estos valores con: terraform output
-# -----------------------------------------------------------------------------
 
 output "vpc_id" {
-  description = "ID de la VPC creada"
-  value       = module.vpc.vpc_id
+  value = module.vpc.vpc_id
 }
 
-output "nat_gateway_ips" {
-  description = "IPs públicas de los NAT Gateways (para whitelist)"
-  value = {
-    az_a = module.vpc.nat_gateway_a_ip
-    az_b = module.vpc.nat_gateway_b_ip
-  }
+output "aurora_writer_endpoint" {
+  description = "Endpoint de escritura Aurora — Django lo usará para conectarse a la BD"
+  value       = module.aurora.aurora_writer_endpoint
+}
+
+output "aurora_reader_endpoint" {
+  description = "Endpoint de lectura Aurora"
+  value       = module.aurora.aurora_reader_endpoint
+}
+
+output "aurora_secret_arn" {
+  description = "ARN del secreto de Aurora en Secrets Manager — las EC2 necesitan esto"
+  value       = module.secrets_manager.aurora_secret_arn
 }
 
 output "security_group_ids" {
-  description = "IDs de los Security Groups creados"
   value = {
-    alb          = module.security_groups.sg_alb_id
-    ec2          = module.security_groups.sg_ec2_id
-    aurora       = module.security_groups.sg_aurora_id
-    elasticache  = module.security_groups.sg_elasticache_id
+    alb         = module.security_groups.sg_alb_id
+    ec2         = module.security_groups.sg_ec2_id
+    aurora      = module.security_groups.sg_aurora_id
+    elasticache = module.security_groups.sg_elasticache_id
   }
 }
