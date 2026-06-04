@@ -1,0 +1,61 @@
+# =============================================================================
+# requirements.txt — Dependencias Python para Veltri Minimarket
+# =============================================================================
+# Instalar con: pip install -r requirements.txt
+# Actualizar: pip install -r requirements.txt --upgrade
+# Generar lock file: pip freeze > requirements.lock
+# =============================================================================
+
+# ============= FRAMEWORK WEB =============
+Django==4.2.11                      # Framework web
+djangorestframework==3.14.0         # API REST
+django-cors-headers==4.3.1          # CORS (solicitudes cross-origin)
+django-filter==24.1                 # Filtrado en APIs
+
+# ============= BASE DE DATOS =============
+psycopg2-binary==2.9.9              # Adaptador PostgreSQL (Aurora Compatible)
+SQLAlchemy==2.0.27                  # ORM alternativo (opcional)
+
+# ============= CACHÉ Y SESSION =============
+redis==5.0.1                        # Cliente Redis (ElastiCache)
+django-redis==5.4.0                 # Backend de cache/sessions con Redis
+
+# ============= VARIABLES DE ENTORNO =============
+python-dotenv==1.0.0                # Cargar variables de .env
+python-decouple==3.8                # Decodificar variables de config
+
+# ============= AWS INTEGRATION =============
+boto3==1.34.42                      # AWS SDK (Secrets Manager, S3, SQS, etc.)
+botocore==1.34.42                   # Dependencia de boto3
+django-storages==1.14.2             # Almacenamiento en S3
+
+# ============= SEGURIDAD =============
+cryptography==42.0.5                # Encriptación
+django-cors-headers==4.3.1          # CORS
+django-ratelimit==4.1.0             # Rate limiting
+
+# ============= LOGGING Y MONITORING =============
+watchtower==3.0.1                   # Enviar logs a CloudWatch
+python-json-logger==2.0.7           # Logs en formato JSON
+
+# ============= SERVIDOR WSGI =============
+gunicorn==21.2.0                    # Servidor WSGI para producción
+uvicorn==0.27.0                     # Alternativa: servidor ASGI
+
+# ============= UTILIDADES =============
+requests==2.31.0                    # Cliente HTTP
+celery==5.3.6                       # Task queue (para jobs asíncrono)
+click==8.1.7                        # CLI utilities
+
+# ============= TESTING Y DESARROLLO =============
+pytest==7.4.4                       # Framework de testing
+pytest-django==4.7.0                # Integración pytest + Django
+pytest-cov==4.1.0                   # Coverage en pytest
+factory-boy==3.3.0                  # Factories para fixtures
+black==24.1.1                       # Code formatter
+flake8==7.0.0                       # Linter
+isort==5.13.2                       # Organizador de imports
+mypy==1.8.0                         # Type checking
+
+# ============= DOCUMENTACIÓN =============
+drf-spectacular==0.27.0             # Generación automática de OpenAPI/Swagger

@@ -39,8 +39,11 @@ API Gateway (HTTPS, timeout 29s, Correlation ID)
 Application Load Balancer (health check cada 30s)
    │
    ├──── Zona AZ-a ──── [Subred Privada 3] ── Auto Scaling EC2-a (Django)
-   │                           │
+   │                           │                      ▲
+   │                           │                      │
    └──── Zona AZ-b ──── [Subred Privada 4] ── Auto Scaling EC2-b (Django)
+                               │                      │
+                               ├──────────────────────┘
                                │
                         ElastiCache Redis (< 50ms, LRU)
                                │
@@ -50,6 +53,18 @@ Application Load Balancer (health check cada 30s)
            [Subred Privada 5]   [Subred Privada 6]
                  (AZ-a)               (AZ-b)
               ◄─────── Replicación síncrona ────────►
+                               │
+                    ┌──────────┴──────────┐
+                    │                     │
+                   SQS ◄───────────────────┘
+                    │
+                    ▼
+            Lambda Functions
+         (Procesamiento asíncrono)
+         
+         • Reportes de ventas
+         • Sincronización de inventario
+         • Notificaciones por email
 ```
 
 ---
@@ -66,14 +81,16 @@ veltri-infra/
 │   │   │   └── outputs.tf
 │   │   ├── security_groups/        # ✅ Semana 1 — Firewall por capas
 │   │   │   └── main.tf
-│   │   ├── aurora/                 # 🔜 Semana 2 — Base de datos Multi-AZ
 │   │   ├── secrets_manager/        # 🔜 Semana 2 — Gestión de credenciales
+│   │   ├── aurora/                 # 🔜 Semana 2 — Base de datos Multi-AZ
+│   │   ├── elasticache/            # 🔜 Semana 2/5 — Caché Redis
+│   │   ├── iam/                    # 🔜 Semana 3 — Roles y políticas
+│   │   ├── ecr/                    # 🔜 Semana 3 — Repositorio Docker
 │   │   ├── ec2_asg/                # 🔜 Semana 3 — Backend con Auto Scaling
-│   │   ├── ecr/                    # 🔜 Semana 3 — Repositorio de imágenes Docker
 │   │   ├── alb/                    # 🔜 Semana 4 — Load Balancer
 │   │   ├── api_gateway/            # 🔜 Semana 4 — API Gateway
-│   │   ├── elasticache/            # 🔜 Semana 5 — Caché Redis
 │   │   ├── s3_cloudfront/          # 🔜 Semana 5 — CDN y archivos estáticos
+│   │   ├── sqs_lambda/             # 🔜 Semana 5 — Colas y procesamiento asíncrono
 │   │   └── cloudwatch/             # 🔜 Semana 6 — Monitoreo
 │   └── environments/
 │       ├── dev/                    # ✅ Entorno de desarrollo
@@ -87,6 +104,11 @@ veltri-infra/
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml              # 🔜 Semana 3 — Pipeline CI/CD
+├── documentation/                  # Guías específicas
+│   ├── SEMANA1.md                  # ✅ Completado
+│   ├── SEMANA2.md                  # 🔜 En progreso
+│   └── DEPLOYMENT.md
+├── ESTADO_PROYECTO.md              # ⭐ Análisis actual (NUEVO)
 └── README.md
 ```
 
@@ -147,12 +169,25 @@ veltri-infra/
 - [ ] Timeout de 29 segundos
 - [ ] Correlation ID en headers
 
-### 🔜 Semana 5 — Rendimiento (ElastiCache + CloudFront + S3)
+### 🔜 Semana 5 — Rendimiento (ElastiCache + CloudFront + S3 + SQS + Lambda)
 - [ ] ElastiCache Redis (política LRU, eviction al 95% memoria)
 - [ ] Bucket S3 con versionado habilitado
 - [ ] CloudFront distribution
 - [ ] WAF con reglas SQL injection
 - [ ] Cache-Control headers (24 horas)
+- [ ] **SQS Queue** para procesamiento asíncrono
+  - Message retention: 4 días
+  - Visibility timeout: 60s
+  - Dead Letter Queue habilitada
+- [ ] **Lambda Functions** para procesar mensajes
+  - Runtime: Python 3.11
+  - Triggers: SQS, CloudWatch Events
+  - Casos de uso:
+    - Reportes de ventas
+    - Sincronización de inventario
+    - Notificaciones por email
+    - Procesamiento de imágenes
+  - Permisos: SQS, Aurora, Secrets Manager, CloudWatch Logs
 
 ### 🔜 Semana 6 — Monitoreo + Producción
 - [ ] CloudWatch dashboards
@@ -217,10 +252,13 @@ terraform destroy
 | CloudFront | ~$5/mes | ~$25/mes |
 | S3, Route 53, WAF | ~$10/mes | ~$25/mes |
 | ElastiCache t3.micro | ~$12/mes | ~$25/mes |
+| **SQS** | ~$1/mes | ~$5/mes |
+| **Lambda** | ~$1/mes | ~$10/mes |
 | CloudWatch | ~$5/mes | ~$15/mes |
-| **Total** | **~$145/mes** | **~$380/mes** |
+| **Total** | **~$147/mes** | **~$395/mes** |
 
 > 💡 Para DEV pueden apagar las EC2 y Aurora fuera del horario de trabajo para reducir costos.
+> 💡 SQS y Lambda tienen tier gratuito: 1M solicitudes/mes y 1M invocaciones.
 
 ---
 
